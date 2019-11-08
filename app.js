@@ -2,6 +2,9 @@ const querystring = require('querystring')
 const handleBlogRouter = require('./src/router/blog')
 const handleUserRouter = require('./src/router/user')
 
+// session数据
+const SESSION_DATA = {}
+
 // 用于处理postData
 const getPostData = req => {
   const promise = new Promise((res, rej) => {
@@ -22,7 +25,6 @@ const getPostData = req => {
         res({})
         return
       }
-      console.log(postData)
       res(
         JSON.parse(postData)
       )
@@ -50,11 +52,24 @@ const serverHandle = (req, res) => {
       return
     }
     const arr = item.split('=')
-    const key = arr[0]
-    const val = arr[1]
+    const key = arr[0].trim()
+    const val = arr[1].trim()
     req.cookie[key] = val
   });
-  console.log(req.cookie)
+
+  // 解析session
+  const ifCookie = false
+  const userId = req.cookie.userId
+  if (userId) {
+    if (SESSION_DATA[userId]) {
+      req.session = SESSION_DATA[userId]
+    } else {
+      ifCookie = true
+      userId = `${Date.now}_${Math.random()}`
+      SESSION_DATA[userId] = {}
+      req.session = SESSION_DATA[userId]
+    }
+  }
 
   // 解析postData
   getPostData(req).then(postData => {
@@ -64,6 +79,9 @@ const serverHandle = (req, res) => {
       const blogResult = handleBlogRouter(req, res)
       if(blogResult){
           blogResult.then(blogData => {
+            if (ifCookie) {
+              res.setHeader('Set-Cookie', `userid=${data.userId}; path=/; httpOnly; expires=${getCookieExpires()}`)
+            }
             res.end(
               JSON.stringify(blogData)
             )
@@ -83,10 +101,14 @@ const serverHandle = (req, res) => {
     if(userResult) {
       userResult.then(userData => {
         if(userData){
-            res.end(
-              JSON.stringify(userData)
-            )
+          if (ifCookie) {
+            res.setHeader('Set-Cookie', `userid=${data.userId}; path=/; httpOnly; expires=${getCookieExpires()}`)
           }
+          
+          res.end(
+            JSON.stringify(userData)
+          )
+        }
       })
       return
     }
